@@ -220,7 +220,7 @@
 
           <div class="divider"></div>
           <h3 class="title" style="font-size:1.35rem">Imágenes</h3>
-          <p class="mini"><strong>Nuevo criterio:</strong> pegá URLs externas de GitHub/Cloudflare/CDN. No subas imágenes al bucket de Supabase para evitar volver a quemar ancho de banda. Cargá hasta 3 imágenes por prenda.</p>
+          <p class="mini">Podés pegar URLs públicas de Cloudflare R2 (<strong>cdn.sinrecreo.com.ar</strong>) o, cuando activemos la Edge Function <strong>upload-product-image</strong>, subir archivos desde acá. Cargá hasta 3 imágenes por prenda.</p>
 
           <div class="img-grid" id="imagesGrid"></div>
 
@@ -425,10 +425,12 @@
 
   <script>
     const CONFIG = {
-      SUPABASE_URL: 'https://xedhdojvynmwaadmkcby.supabase.co',
-      SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhlZGhkb2p2eW5td2FhZG1rY2J5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2NjQ4MjYsImV4cCI6MjA5MTI0MDgyNn0.Keaskg8KUqFz4JyuUJJxGCjIDdD6iaDnEAUyvwPgZrA',
-      STORAGE_BUCKET: 'product-images',
-      PUDO_CREATE_ORDER_ENDPOINT: 'https://xedhdojvynmwaadmkcby.supabase.co/functions/v1/pudo-create-order'
+      SUPABASE_URL: 'https://bhzwcevmeqzofuwnwpnm.supabase.co',
+      SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJoendjZXZtZXF6b2Z1d253cG5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5OTExNzksImV4cCI6MjA5MjU2NzE3OX0.LGDbzUNprkAfbiOC7oFuew0EpCOPll9ckdGL-LidhGA',
+      STORAGE_BUCKET: 'sinrecreo-product-images',
+      R2_PUBLIC_BASE_URL: 'https://cdn.sinrecreo.com.ar',
+      R2_UPLOAD_ENDPOINT: 'https://bhzwcevmeqzofuwnwpnm.supabase.co/functions/v1/upload-product-image',
+      PUDO_CREATE_ORDER_ENDPOINT: 'https://bhzwcevmeqzofuwnwpnm.supabase.co/functions/v1/pudo-create-order'
     };
 
     const SIZE_ORDER = ['XS','S','M','L','XL','XXL'];
@@ -491,7 +493,7 @@
 
     const init = () => {
       if (!isConfigured()) {
-        showStatus('Pegá tu SUPABASE_URL y SUPABASE_ANON_KEY en el archivo admin_catalogo_supabase.html antes de usarlo.', 'err');
+        showStatus('Pegá tu SUPABASE_URL y SUPABASE_ANON_KEY en el archivo admin.html antes de usarlo.', 'err');
         return;
       }
       sb = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
@@ -1387,11 +1389,37 @@
       const urlInput = el(`imageUrl${position}`);
       const file = fileInput.files?.[0];
 
-      if (file) {
-        throw new Error('No subas imágenes al Storage de Supabase. Optimizá la imagen, subila a GitHub/Cloudflare/CDN y pegá acá la URL pública.');
+      // Si se pega una URL manual de Cloudflare R2, la guardamos tal cual.
+      if (!file) {
+        return urlInput.value.trim() || '';
       }
 
-      return urlInput.value.trim() || '';
+      if (!CONFIG.R2_UPLOAD_ENDPOINT) {
+        throw new Error('Todavía no está configurada la subida automática a Cloudflare R2. Subí la imagen a R2 y pegá la URL pública.');
+      }
+
+      const { data: sessionData } = await sb.auth.getSession();
+      const token = sessionData?.session?.access_token || CONFIG.SUPABASE_ANON_KEY;
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('product_slug', productSlug);
+      formData.append('position', String(position));
+
+      const response = await fetch(CONFIG.R2_UPLOAD_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'apikey': CONFIG.SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result?.ok === false) {
+        throw new Error(result?.error || 'No se pudo subir la imagen a Cloudflare R2.');
+      }
+
+      return result.publicUrl || result.public_url || result.url || '';
     };
 
     const saveProduct = async () => {

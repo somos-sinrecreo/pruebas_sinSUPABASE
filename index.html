@@ -2713,10 +2713,10 @@
     mpMode: 'backend', // 'direct_links' o 'backend'
     mpEnvironment: 'sandbox', // 'sandbox' mientras uses credenciales de prueba; luego 'production'
     mpGenericLink: '',      // opcional: link general de Mercado Pago
-    mpPreferenceEndpoint: 'https://xedhdojvynmwaadmkcby.supabase.co/functions/v1/create-mp-preference',// endpoint seguro de backend para crear preferencias
-    transferOrderEndpoint: 'https://xedhdojvynmwaadmkcby.supabase.co/functions/v1/create-transfer-order',// endpoint seguro para pedidos por transferencia
-    pudoQuoteEndpoint: 'https://xedhdojvynmwaadmkcby.supabase.co/functions/v1/pudo-shipping-rates',// endpoint seguro para cotizar PUDO
-    pudoOrderEndpoint: 'https://xedhdojvynmwaadmkcby.supabase.co/functions/v1/pudo-create-order',// endpoint seguro para crear orden PUDO luego del pago
+    mpPreferenceEndpoint: 'https://bhzwcevmeqzofuwnwpnm.supabase.co/functions/v1/create-mp-preference',// endpoint seguro de backend para crear preferencias
+    transferOrderEndpoint: 'https://bhzwcevmeqzofuwnwpnm.supabase.co/functions/v1/create-transfer-order',// endpoint seguro para pedidos por transferencia
+    pudoQuoteEndpoint: 'https://bhzwcevmeqzofuwnwpnm.supabase.co/functions/v1/pudo-shipping-rates',// endpoint seguro para cotizar PUDO
+    pudoOrderEndpoint: 'https://bhzwcevmeqzofuwnwpnm.supabase.co/functions/v1/pudo-create-order',// endpoint seguro para crear orden PUDO luego del pago
     pudoMaxItemsPerShipment: 7,
     pudoBoxBaseMm: 280,
     pudoBoxHeightPerItemMm: 50,
@@ -2724,18 +2724,10 @@
     pickupLabel: 'Retiro en zona Corimayo · Burzaco',
     pickupDetails: 'Sin costo de envío. Coordinamos día y horario por WhatsApp después de la compra.',
     useSupabase: true,
-    supabaseUrl: 'https://xedhdojvynmwaadmkcby.supabase.co',
-    supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhlZGhkb2p2eW5td2FhZG1rY2J5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2NjQ4MjYsImV4cCI6MjA5MTI0MDgyNn0.Keaskg8KUqFz4JyuUJJxGCjIDdD6iaDnEAUyvwPgZrA',
-    supabaseStorageBucket: 'product-images',
-    adminUrl: './admin.html',
-
-    // MODO EMERGENCIA:
-    // La tienda intenta leer primero ./data/catalog.json en GitHub Pages.
-    // Así el catálogo se visualiza aunque Supabase tenga servicios suspendidos por cuota.
-    catalogSource: 'static', // 'static' para GitHub JSON · 'supabase' cuando quieras volver a Supabase
-    staticCatalogUrl: './data/catalog.json',
-    emergencyWhatsappCheckout: true,
-    emergencyDisablePudo: true
+    supabaseUrl: 'https://bhzwcevmeqzofuwnwpnm.supabase.co',
+    supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJoendjZXZtZXF6b2Z1d253cG5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5OTExNzksImV4cCI6MjA5MjU2NzE3OX0.LGDbzUNprkAfbiOC7oFuew0EpCOPll9ckdGL-LidhGA',
+    supabaseStorageBucket: 'sinrecreo-product-images',
+    adminUrl: './admin.html'
   };
 
   /*
@@ -2960,7 +2952,7 @@
   let selectedShippingOption = null;
   let selectedCartShippingOption = null;
   let cartCheckoutOpen = false;
-  let cartDeliveryMethod = STORE_CONFIG.emergencyDisablePudo ? 'pickup' : 'pudo';
+  let cartDeliveryMethod = 'pudo';
 
   const normalizeCustomer = (customer = {}) => ({
     name: String(customer.name || '').trim(),
@@ -3334,10 +3326,6 @@
       return;
     }
     const packageItem = buildPudoPackageItem(context);
-    if (STORE_CONFIG.emergencyDisablePudo) {
-      showShippingStatus(context, 'PUDO está desactivado en modo emergencia. Elegí retiro o coordiná la entrega por WhatsApp.', 'error');
-      return;
-    }
     if (!STORE_CONFIG.pudoQuoteEndpoint) {
       showShippingStatus(context, 'Falta configurar el endpoint seguro de cotización PUDO en Supabase.', 'error');
       return;
@@ -3617,102 +3605,6 @@
     return Object.keys(counts).map(name => normalizeCapsuleRecord(capsuleInfoFallback[name] || { name }, counts[name]));
   };
 
-  const isStaticCatalogMode = () => String(STORE_CONFIG.catalogSource || '').toLowerCase() === 'static';
-
-  const normalizeStaticProducts = (productRows = [], imageRows = [], stockRows = []) => {
-    blankStockRows = Array.isArray(stockRows) ? stockRows : [];
-    const stockSnapshot = buildBlankStockSnapshot(blankStockRows);
-
-    const imagesByProduct = {};
-    (Array.isArray(imageRows) ? imageRows : []).forEach(row => {
-      const productKey = String(row.product_id || row.productId || row.db_product_id || row.dbId || '').trim();
-      if (!productKey) return;
-      if (!imagesByProduct[productKey]) imagesByProduct[productKey] = [];
-      imagesByProduct[productKey].push(row);
-    });
-
-    return (Array.isArray(productRows) ? productRows : [])
-      .filter(row => row && row.is_active !== false && row.active !== false)
-      .map(row => {
-        const dbId = String(row.dbId || row.db_id || row.id || '').trim();
-        const slug = String(row.slug || row.product_slug || row.handle || row.id || dbId || '').trim();
-        const rawImages = Array.isArray(row.images)
-          ? row.images
-          : (Array.isArray(row.galeria) ? row.galeria : (Array.isArray(row.gallery) ? row.gallery : []));
-        const linkedImages = (imagesByProduct[dbId] || imagesByProduct[String(row.id || '').trim()] || [])
-          .sort((a,b) => Number(a.position || 999) - Number(b.position || 999))
-          .map(img => img.image_url || img.url || img.src || '')
-          .filter(Boolean);
-        const cleanImages = [...rawImages, ...linkedImages]
-          .map(url => String(url || '').trim())
-          .filter(Boolean)
-          .slice(0, 6);
-
-        return {
-          id: slug || dbId,
-          dbId,
-          sku: row.sku || '',
-          capsule: row.capsule || row.capsula || '',
-          title: row.title || row.titulo || '',
-          description: row.description || row.descripcion || '',
-          price: Number(row.price ?? row.precio ?? 0),
-          cut: row.cut || row.corte || 'Unisex',
-          sortDate: row.sortDate || row.sort_date || row.fecha_orden || new Date().toISOString().slice(0, 10),
-          featured: Boolean(row.featured ?? row.destacado ?? false),
-          artType: row.artType || row.art_type || row.estilo_visual || 'poster',
-          images: cleanImages,
-          blankStockByFitColorSize: stockSnapshot.byFitColorSize,
-          fitStockBySize: stockSnapshot.fitStockBySize,
-          blankStockIdsByKey: stockSnapshot.blankStockIdsByKey,
-          variantIdsByKey: stockSnapshot.variantIdsByKey,
-          variantIdsBySize: stockSnapshot.variantIdsBySize,
-          mpLinksByKey: {}
-        };
-      });
-  };
-
-  const normalizeStaticCapsules = (capsuleRows = [], productRows = []) => {
-    const counts = productRows.reduce((acc, product) => {
-      const name = product.capsule || product.capsula || '';
-      if (!name) return acc;
-      acc[name] = (acc[name] || 0) + 1;
-      return acc;
-    }, {});
-
-    const normalized = (Array.isArray(capsuleRows) ? capsuleRows : [])
-      .filter(row => row && row.is_active !== false && row.active !== false)
-      .map(row => normalizeCapsuleRecord(row, counts[row.name || row.capsule || row.capsula] || 0));
-
-    if (normalized.length) return normalized;
-    return getCapsuleFallbackData();
-  };
-
-  const loadStaticCatalogFromFile = async () => {
-    if (!STORE_CONFIG.staticCatalogUrl) return null;
-
-    try {
-      const response = await fetch(STORE_CONFIG.staticCatalogUrl, { cache: 'no-store' });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      const payload = await response.json();
-      const productRows = payload.products || payload.productRows || payload.productos || [];
-      const imageRows = payload.product_images || payload.imageRows || payload.images || [];
-      const stockRows = payload.blank_stock || payload.stockRows || payload.stock || [];
-      const capsuleRows = payload.capsules || payload.capsuleRows || payload.capsulas || [];
-
-      const staticProducts = normalizeStaticProducts(productRows, imageRows, stockRows);
-      if (!staticProducts.length) return null;
-
-      return {
-        products: staticProducts,
-        capsules: normalizeStaticCapsules(capsuleRows, staticProducts)
-      };
-    } catch (error) {
-      console.warn('No se pudo cargar el catálogo estático desde GitHub:', error);
-      return null;
-    }
-  };
-
   const loadCapsulesFromSupabase = async () => {
     const client = initSupabaseClient();
     if (!client) return getCapsuleFallbackData();
@@ -3789,7 +3681,7 @@
   const loadPublicStoreMetrics = async () => {
     const localMetrics = computeLocalStoreMetrics();
     const client = initSupabaseClient();
-    if (!client || isStaticCatalogMode()) return localMetrics;
+    if (!client) return localMetrics;
 
     try {
       const { data, error } = await client.rpc('get_store_public_metrics');
@@ -4069,13 +3961,7 @@
 
   const initStore = async () => {
     try {
-      const staticCatalog = await loadStaticCatalogFromFile();
-
-      if (staticCatalog?.products?.length) {
-        products = staticCatalog.products;
-        capsulesData = staticCatalog.capsules?.length ? staticCatalog.capsules : getCapsuleFallbackData();
-        console.info('Catálogo cargado desde archivo estático de GitHub:', STORE_CONFIG.staticCatalogUrl);
-      } else if (isSupabaseConfigured() && !isStaticCatalogMode()) {
+      if (isSupabaseConfigured()) {
         const [remoteProducts, remoteCapsules] = await Promise.all([
           loadProductsFromSupabase(),
           loadCapsulesFromSupabase().catch(error => {
@@ -4090,11 +3976,11 @@
         }
         capsulesData = remoteCapsules?.length ? remoteCapsules : getCapsuleFallbackData();
       } else {
-        console.warn('No se encontró data/catalog.json o está vacío. Se muestran productos de ejemplo.');
+        console.warn('Supabase no está configurado. Se muestran los productos de ejemplo.');
         capsulesData = getCapsuleFallbackData();
       }
     } catch (error) {
-      console.error('Error cargando catálogo:', error);
+      console.error('Error cargando catálogo desde Supabase:', error);
       capsulesData = getCapsuleFallbackData();
     } finally {
       productSalesMap = {};
@@ -4948,7 +4834,7 @@ En un momento les envío el comprobante por este medio. ¿Me confirman disponibi
   const updateCartDeliveryUI = () => { document.getElementById('deliveryChoicePudo')?.classList.toggle('selected', cartDeliveryMethod === 'pudo'); document.getElementById('deliveryChoicePickup')?.classList.toggle('selected', cartDeliveryMethod === 'pickup'); document.getElementById('cartShippingPanel')?.classList.toggle('hidden', cartDeliveryMethod !== 'pudo'); document.getElementById('cartPickupSummary')?.classList.toggle('hidden', cartDeliveryMethod !== 'pickup'); if (cartDeliveryMethod === 'pickup') hideShippingStatus('cart'); };
   const selectCartDeliveryMethod = (method = 'pudo') => { cartDeliveryMethod = method === 'pickup' ? 'pickup' : 'pudo'; if (cartDeliveryMethod === 'pickup') selectedCartShippingOption = getPickupShippingOption(); else if (selectedCartShippingOption?.provider === 'RETIRO') selectedCartShippingOption = null; updateCartUI(); };
   const openCartCheckout = () => { if (!cart.length) return; cartCheckoutOpen = true; updateCartUI(); document.getElementById('cartCheckoutPanel')?.scrollIntoView({ behavior:'smooth', block:'start' }); };
-  const updateCartCheckoutCta = () => { const cta = document.getElementById('cartFinalCheckoutButton'); const secure = document.getElementById('cartSecureNote'); if (!cta) return; if (STORE_CONFIG.emergencyWhatsappCheckout) { cta.className = 'modal-cta'; cta.textContent = 'Enviar pedido por WhatsApp'; if (secure) secure.textContent = 'Modo emergencia: el pedido se coordina por WhatsApp hasta que vuelva Supabase.'; return; } if (selectedPayMethod === 'transfer') { cta.className = 'modal-cta'; cta.textContent = 'Confirmar transferencia'; if (secure) secure.textContent = 'Reservá el pedido y cerrá el pago con contacto directo por WhatsApp'; } else { cta.className = 'modal-cta mp-style'; cta.textContent = 'Pagar con Mercado Pago'; if (secure) secure.textContent = 'Pago en entorno seguro de Mercado Pago · Producto y entrega incluidos'; } };
+  const updateCartCheckoutCta = () => { const cta = document.getElementById('cartFinalCheckoutButton'); const secure = document.getElementById('cartSecureNote'); if (!cta) return; if (selectedPayMethod === 'transfer') { cta.className = 'modal-cta'; cta.textContent = 'Confirmar transferencia'; if (secure) secure.textContent = 'Reservá el pedido y cerrá el pago con contacto directo por WhatsApp'; } else { cta.className = 'modal-cta mp-style'; cta.textContent = 'Pagar con Mercado Pago'; if (secure) secure.textContent = 'Pago en entorno seguro de Mercado Pago · Producto y entrega incluidos'; } };
 
   const setCartCheckoutBusy = (busy = false, label = '') => {
     const cta = document.getElementById('cartFinalCheckoutButton');
@@ -4979,47 +4865,7 @@ En un momento les envío el comprobante por este medio. ¿Me confirman disponibi
     window.location.href = url;
   };
 
-  const checkoutWhatsAppEmergency = () => {
-    if (!cart.length) return;
-
-    const customer = collectCartCustomer();
-    if (!customer) return;
-
-    const shipping = cartDeliveryMethod === 'pickup'
-      ? getPickupShippingOption()
-      : (getSelectedShipping('cart') || null);
-
-    const useTransferPrice = selectedPayMethod === 'transfer' || STORE_CONFIG.emergencyWhatsappCheckout;
-    const items = cart.map(item => ({
-      title: item.title,
-      sku: item.sku,
-      capsule: item.capsule,
-      size: item.selectedSize,
-      fit: item.selectedFit || 'unisex',
-      color: item.selectedColor || 'Hueso',
-      quantity: item.qty,
-      basePrice: Number(item.price || 0),
-      discount: useTransferPrice ? (Number(item.price || 0) - Number(getTransferPrice(item) || 0)) * Number(item.qty || 1) : 0,
-      lineTotal: Number(useTransferPrice ? getTransferPrice(item) : item.price || 0) * Number(item.qty || 1)
-    }));
-
-    const subtotal = items.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0);
-    const total = subtotal + Number(shipping?.charge || 0);
-
-    const message = buildTransferOrderMessage({
-      customer,
-      items,
-      total,
-      shipping,
-      orderCode: 'Modo emergencia'
-    });
-
-    const whatsappUrl = getWhatsAppBase() + '?text=' + encodeURIComponent(message + '\n\nNota: pedido generado en modo emergencia, sin registro automático en Supabase.');
-    window.open(whatsappUrl, '_blank');
-  };
-
   const finishCartCheckout = async () => {
-    if (STORE_CONFIG.emergencyWhatsappCheckout) return checkoutWhatsAppEmergency();
     if (selectedPayMethod === 'transfer') return checkoutWhatsApp();
     return checkoutMP();
   };
