@@ -1,0 +1,7 @@
+{
+  "_leer": "Reemplazá este archivo por el resultado exportado desde Supabase. La tienda lee products, product_images, blank_stock y capsules desde acá.",
+  "products": [],
+  "product_images": [],
+  "blank_stock": [],
+  "capsules": []
+}
